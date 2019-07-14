@@ -5,118 +5,111 @@
  *
 */
 
-class soundcloud
+class SoundCloud
 {
+    const apiEndpoint  = "https://api.soundcloud.com";
+    const version      = 0.2;
 
-    private $api_key;
-    private $client_id;
-    private $link;
-    private $tid;
-    private $api_url = "https://api.soundcloud.com";
-    private $track_data = array();
-    private $url_tmp;
+    private $clientKeys = [
+        'client_id' => null,
+        'client_secret' => null
+    ];
 
-    function __construct($key = null, $id = null)
+    private $apiUrl;
+    private $tempData;
+
+    public function __construct(array $keys)
     {
-
-        if (!empty($key)) $this->set('api_key', $key);
-        if (!empty($id)) $this->set('client_id', $id);
-
-        return true;
+        $this->setKeys($keys);
     }
 
-    /* SET AND GET VARIABLES.
-     * INSTEAD OF LOTS OF SEPERATE METHODS WE WILL USE A SIMPLE (VARIABLE_NAME,VARIABLE_VALUE) METHOD
-    */
-
-    function set($a, $b)
+    public function setKeys(array $keys): void
     {
-        if (is_array($this->$a)) return false;
 
-        return $this->$a = $b;
+        $validKeys = [
+            'client_id', 'client_secret'
+        ];
+
+        foreach($keys as $key=>$val) {
+            if(!in_array($key, $validKeys)) {
+                throw new InvalidArgumentException('Only accepts client_id|client_secret.');
+            }
+            $this->clientKeys[$key] = $val;
+        }
     }
 
-    function get($a)
+    private function buildUrl(string $apiCall, ?array $arguments=null): void
     {
-        return (isset($this->$a) ? $this->$a : false);
+        $argString = null;
+
+        if($arguments !== null) {
+            foreach($arguments as $key=>$val) {
+                $argString .= '&'.$key.'='.urlencode($val);
+            }
+        }
+
+        $this->apiUrl = static::apiEndpoint.'/'.$apiCall.'?client_id='.$this->clientKeys['client_id']. $argString;
     }
 
-    // ** LET'S GO ** //
-    function build_url($call, ...$args)
+    private function doRemoteFetch(): bool
     {
-
-        $arglist = "";
-
-        if (empty($call)) return false;
-        if (!empty($args)) foreach ($args as $a) $arglist .= "&{$a}";
-        else $arglist = "";
-
-        $this->set('url_tmp', $this->get('api_url') . "/{$call}?client_id=" . $this->get('client_id') . $arglist);
-    }
-
-    function fetch()
-    {
-
+        $this->tempData = null;
         $ch = curl_init();
 
-        curl_setopt($ch, CURLOPT_URL, $this->get('url_tmp'));
+        curl_setopt($ch, CURLOPT_URL, $this->apiUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
         $output = curl_exec($ch);
 
         $output = json_decode($output);
 
-        $this->track_data = $output;
+        $this->tempData = $output;
 
         curl_close($ch);
 
-        if (!empty($this->track_data)) return true;
+        if (!empty($this->tempData)) return true;
         else return false;
     }
 
-    function resolve($turl)
+    public function doApiCall(string $apiMethod, ?array $arguments = null)
     {
+        $this->buildUrl($apiMethod, $arguments);
+        $apiResponse = $this->doRemoteFetch();
 
-        $turl = urlencode($turl);
-
-        $this->build_url("resolve.json", "url=" . $turl);
-        if ($this->fetch() && intval($this
-            ->track_data
-            ->status) == 302)
-        {
-
-            return ($this->set('url_tmp', $this
-                ->track_data
-                ->location));
-
-        }
-        else return false;
+        return $apiResponse;
     }
 
-    function track_data(...$d)
+    public function resolveSoundCloudUrl(string $trackUrl): ?int
     {
+        $this->doApiCall('resolve',[
+            'url' => $trackUrl
+        ]);
 
-        if (empty($d)) return $this->track_data;
-
-        if (is_array($d))
-        {
-
-            $return = array();
-
-            foreach ($d as $d)
-            {
-                $d = (string)$d;
-
-                $return[$d] = $this
-                    ->track_data->$d;
-            }
-
-        }
-        else
-        {
-            $return = $this->track_data[$d];
+        if(isset($this->tempData->id) && $this->tempData->id>0) {
+            return $this->tempData->id;
         }
 
-        return $return;
+        return null;
+    }
+
+    public function fetchTrackData(string $trackUrl, ?array $arrayKeysToReturn = null): array
+    {
+        $finalReturnArray = [];
+
+        $this->doApiCall('resolve', [
+            'url' => $trackUrl
+        ]);
+
+        if($arrayKeysToReturn == null) {
+            return (array) $this->tempData;
+        }
+
+        foreach($arrayKeysToReturn as $keyToReturn) {
+            $finalReturnArray[$keyToReturn] = (!empty($this->tempData->$keyToReturn)) ? $this->tempData->$keyToReturn : null;
+        }
+
+        return $finalReturnArray;
     }
 
 }

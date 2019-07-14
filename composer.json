@@ -1,6 +1,6 @@
 {
     "name": "domlip94/soundcloudfetcher",
-    "description": "Simple PHP Wrapper for Soundcloud API",
+    "description": "Simple PHP Wrapper for SoundCloud API",
     "keywords": ["php", "api", "soundcloud", "php", "music"],
     "homepage": "https://github.com/DomLip94/SoundCloudFetcher",
     "license": "MIT",
@@ -12,7 +12,9 @@
         }
     ],
     "require": {
-        "php": ">=5.3.0"
+        "php": ">=7.3.0",
+        "ext-json": "*",
+        "ext-curl": "*"
     },
     "autoload": {
         "files": ["soundcloud.php"]
